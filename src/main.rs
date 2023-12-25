@@ -1,28 +1,20 @@
 use std::net::{TcpListener, TcpStream};
 use std::io::prelude::*;
-use std::fs;
+use rand::Rng;
+
+pub mod utils;
 
 fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0; 1024];
-
-    // read incoming bytes
+    let mut buffer: [u8; 1024] = [0; 1024];
     stream.read(&mut buffer).unwrap();
 
-    // decode, print to console
-    println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
-    
-    // send something back
-    let contents = fs::read_to_string("index.html").unwrap();
 
-    let response = format!(
-        "HTTP/1.1 200\r\nContent-Length: {}\r\n\r\n{}",
-        contents.len(),
-        contents
-    );
-
-    stream.write(response.as_bytes()).unwrap();
-    stream.flush().unwrap()
+    let res = utils::handle_response(&buffer);
+    let formatted_res = res.format();
+    // send response back to client
+    let let_ = stream.write(&formatted_res);
 }
+
 fn main() -> std::io::Result<()> {
     // simple http server
 
@@ -37,10 +29,10 @@ fn main() -> std::io::Result<()> {
 
     // lsiten for tcp connection
     for stream in listener.incoming() {
-        println!("Connection established!");
+        println!("Connection established!\n");
+
         handle_client(stream?);
     }
 
-    // return something
     Ok(())
 }
