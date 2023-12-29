@@ -22,7 +22,13 @@ document.getElementById("myForm").addEventListener("submit", (event) => {
       .then((response) => response.json())
       .then((data) => {
         // populate h1 tag with response
-        console.log("Success:", data);
+        let message = document.getElementById("message");
+        let guess = document.getElementById("guess");
+        let actual = document.getElementById("actual");
+
+        message.textContent = data.message;
+        guess.textContent = `Guess: ${inputValue}`;
+        actual.textContent = `Actual: ${data.rand}`;
       })
       .catch((error) => {
         console.error("Error:", error);

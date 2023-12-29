@@ -8,7 +8,6 @@ fn handle_client(mut stream: TcpStream) {
     let mut buffer: [u8; 1024] = [0; 1024];
     stream.read(&mut buffer).unwrap();
 
-
     let res = utils::handle_response(&buffer);
     let formatted_res = res.format();
     // send response back to client
@@ -27,7 +26,7 @@ fn main() -> std::io::Result<()> {
 
     println!("Web server listenening at {}:{}...", HOST, PORT);
 
-    // lsiten for tcp connection
+    // listen for tcp connection
     for stream in listener.incoming() {
         println!("Connection established!\n");
 

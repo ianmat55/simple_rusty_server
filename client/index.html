@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -6,16 +6,22 @@
     <title></title>
     <meta name="description" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <h1>RUSTY SERVER</h1>
-    <p>Guess a number 1-100</p>
-    <form id="myForm">
-      <input type="number" id="input" />
-      <button id="submit">submit</button>
-    </form>
-    <h1 id="result"></h1>
+    <div class="center">
+      <h1>RUSTY SERVER</h1>
+      <p>Guess a number 1-100</p>
+      <form id="myForm">
+        <input type="number" id="input" />
+        <button id="submit">submit</button>
+      </form>
+      <div id="results" class="center">
+        <h4 id="message"></h4>
+        <h4 id="guess"></h4>
+        <h4 id="actual"></h4>
+      </div>
+    </div>
     <script type="text/javascript" src="main.js" async defer></script>
   </body>
 </html>

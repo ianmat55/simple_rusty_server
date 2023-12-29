@@ -75,13 +75,10 @@ impl Response {
     }
 }
 
-fn is_text_file(file_path: &str) -> bool {
-    let text_extensions = ["txt", "html", "css", "js", "json"];
-    if let Some(extension) = file_path.split('.').last() {
-        text_extensions.contains(&extension)
-    } else {
-        false
-    }
+#[derive(Serialize, Deserialize, Debug)]
+struct Guess {
+    message: String,
+    rand: u8,
 }
 
 fn read_file(file_path: &str) -> Result<Vec<u8>, FileReadError> {
@@ -127,24 +124,27 @@ fn build_not_found_error() -> Response {
     return res;
 }
 
-fn check_guess(guess: u8) -> String {
+fn check_guess(guess: u8) -> Vec<u8> {
     let secret_number = rand::thread_rng().gen_range(1..=100);
+    println!("Secret number is {}", secret_number);
     let res = if guess == secret_number {
-        println!("EQUAL");
         "equal"
     } else {
-        println!("NOT EQUAL");
         "not equal"
     }.to_string(); // Convert to String
+    
+    let guess = Guess {
+        message: res, 
+        rand: secret_number,
+    };
+    
+    let serialized = serde_json::to_string(&guess).unwrap(); 
 
-    return res;
+    return serialized.into_bytes();
 }
 
 fn parse_request(buffer: &[u8; 1024]) -> Result<Request, &str> {
-    let request_str = match std::str::from_utf8(buffer) {
-        Ok(str) => str,
-        Err(_e) => return Err("could not parse request"),
-    };
+    let request_str = std::str::from_utf8(buffer).unwrap();
 
     // println!("request:\n {}", request_str);
     
@@ -165,6 +165,8 @@ fn parse_request(buffer: &[u8; 1024]) -> Result<Request, &str> {
         _ => return Err("Invalid http method"),
     };
 
+    let path = String::from(http_parts[1]);
+
     // Handling POST
     let mut data = None;
     if method == HttpType::POST {
@@ -174,74 +176,110 @@ fn parse_request(buffer: &[u8; 1024]) -> Result<Request, &str> {
 
     let req: Request = Request {
         method,
-        path: String::from(http_parts[1]),
+        path,
         data, 
     };
 
     return Ok(req);
 }
 
-pub fn handle_response(buffer: &[u8; 1024]) -> Response {
+fn handle_get(req: Request) -> Response {
     let status_code: u16 = 200;
     let status_line: StatusCode = StatusCode::Ok;
     let mut headers: HashMap<String, String> = HashMap::new();
-    let file_path: &str;
+    let body: Vec<u8>;
 
+    let file_path = match req.path.trim() {
+        "/" => "client/index.html",
+        "/main.js" => "client/main.js",
+        "/favicon.ico" => "client/icon.png",
+        "/styles.css" => "client/styles.css",
+        _ => "client/404.html",
+    };
+    
+    let res: Response;
+    
+    match read_file(file_path) {
+        Ok(contents) => {
+            res = Response {
+                status_code,
+                status_line,
+                headers,
+                body: contents,
+            };
+        },
+        Err(error) => {
+            res = match error {
+                FileReadError::FileNotFound(_) => build_not_found_error(),
+                FileReadError::IOError(_) => build_internal_server_error(),
+            };
+        },
+    };
+
+    return res;
+}
+
+fn handle_post(req: Request) -> Response {
+    let status_code: u16 = 200;
+    let status_line: StatusCode = StatusCode::Ok;
+    let mut headers: HashMap<String, String> = HashMap::new();
+    let body: Vec<u8>;
+
+    let res = match req.path.trim() {
+        "/" => {
+            if let Some(data) = &req.data {
+                let cleaned_json = trim_null_bytes(data);
+     
+                body = match serde_json::from_str::<ClientGuess>(&cleaned_json) {
+                    Ok(parsed_data) => {
+                        println!("Parsed data: {}", parsed_data.data);
+                        // match check_guess(parsed_data.data) {
+                        //     Ok(data) => data,
+                        //     Err(error) => {
+                        //         return build_internal_server_error();
+                        //     },
+                        // }
+                        check_guess(parsed_data.data)
+                    },
+                    Err(error) => {
+                        eprintln!("Failed to parse JSON: {}", error);
+                        return build_internal_server_error();
+                    },
+                };
+
+                let response = Response {
+                    status_code,
+                    status_line,
+                    headers,
+                    body,
+                };
+
+                return response;
+            } else {
+                return build_internal_server_error();
+            }
+        },
+        _ => return build_not_found_error(),
+    };
+}
+
+pub fn handle_response(buffer: &[u8; 1024]) -> Response {
     let req = match parse_request(buffer) {
         Ok(req) => req,
         Err(error) => {
             eprintln!("Failed to parse request: {}", error);
             // Set status for failed request
-            let internal_err = build_internal_server_error(); 
-            return internal_err;
+            return build_internal_server_error(); 
         }
     };
 
-    match req.method {
+    let res = match req.method {
         HttpType::GET => {
-            file_path = match req.path.trim() {
-                "/" => "client/index.html",
-                "/main.js" => "client/main.js",
-                "/favicon.ico" => "client/icon.png",
-                "/styles.css" => "client/styles.css",
-                _ => "client/404.html",
-            };
+            handle_get(req)
         },
         HttpType::POST => {
-            file_path = match req.path.trim() {
-                "/" => {
-             
-                    if let Some(data) = &req.data {
-                        let cleaned_json = trim_null_bytes(data);
-     
-                        match serde_json::from_str::<ClientGuess>(&cleaned_json) {
-                            Ok(parsed_data) => {
-                                println!("Parsed data: {}", parsed_data.data);
-                                check_guess(parsed_data.data);
-                            },
-                            Err(error) => eprintln!("Failed to parse JSON: {}", error),
-                        }
-                    };
-
-                    "client/index.html"
-                },
-                _ => "client/404.html",
-            }            
-        }
-    }
-
-    let res: Response = match read_file(file_path) {
-        Ok(file_contents) => {
-            let res = Response {
-                status_code,
-                status_line,
-                headers,
-                body: file_contents,
-            };
-
-            res
+            handle_post(req)
         },
-        Err(error) => build_internal_server_error()
     };
 
     return res;
