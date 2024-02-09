@@ -1,22 +1,24 @@
 use std::net::{TcpListener, TcpStream};
 use std::io::prelude::*;
-use rand::Rng;
 
 pub mod utils;
+pub mod http;
+pub mod error;
+pub mod guess;
 
-fn handle_client(mut stream: TcpStream) {
+fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
     let mut buffer: [u8; 1024] = [0; 1024];
-    stream.read(&mut buffer).unwrap();
+    let bytes_read = stream.read(&mut buffer)?;
 
-    let res = utils::handle_response(&buffer);
+    let res = http::handle_response(&buffer[..bytes_read]);
     let formatted_res = res.format();
+
     // send response back to client
-    let let_ = stream.write(&formatted_res);
+    let _ = stream.write(&formatted_res)?;
+    Ok(())
 }
 
 fn main() -> std::io::Result<()> {
-    // simple http server
-
     // create tcp socket at address, bind to port
     const HOST: &str = "127.0.0.1";
     const PORT: &str = "3000";
@@ -28,9 +30,18 @@ fn main() -> std::io::Result<()> {
 
     // listen for tcp connection
     for stream in listener.incoming() {
-        println!("Connection established!\n");
-
-        handle_client(stream?);
+        match stream {
+            Ok(stream) => {
+                println!("Connected...");
+                std::thread::spawn(move || {
+                    match handle_client(stream) {
+                        Ok(_) => println!("Response sent..."),
+                        Err(e) => println!("Error: {}", e),
+                    };
+                });
+            }
+            Err(e) => println!("Error: {}", e),
+        }
     }
 
     Ok(())
